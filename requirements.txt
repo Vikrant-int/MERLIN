@@ -1,8 +1,16 @@
 # Direct dependencies for MERLIN (Python voice assistant).
 # Install with:  myprojectenv\Scripts\pip install -r requirements.txt
 
+# --- backend (main.py) -----------------------------------------------------
 SpeechRecognition==3.16.1
 PyAudio==0.2.14
 pyttsx3==2.99
 requests==2.34.2
 google-genai==2.28.0
+
+# --- desktop app (app.py) --------------------------------------------------
+# 6.6 is the floor for QThread/QThreadPool behaviour used by services/,
+# 6.9+ is not tested with the frameless window and native event filter.
+PySide6>=6.6,<6.9
+# Real Windows endpoint volume for the Music page's level slider.
+pycaw==20260927

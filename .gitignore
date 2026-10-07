@@ -34,6 +34,15 @@ myprojectenv/
 *.log
 *.tmp
 
+# --- Packaging --------------------------------------------------------------
+# The spec file is tracked; everything it produces is not.
+build/
+dist/
+*.exe
+*.manifest
+# UI test screenshots are written to %TEMP%, never into the repository.
+merlin_ui_shots/
+
 # --- Editors / OS ------------------------------------------------------------
 .vscode/
 .idea/

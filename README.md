@@ -26,6 +26,29 @@ Google Web Speech API, answers come from Gemini, and headlines come from NewsAPI
   that return digital silence or discontinuous noise, and refuses to start if no
   working microphone is found.
 
+## Desktop app
+
+`app.py` opens a native PySide6/Qt window around the same `main.py` backend —
+nothing in the backend was rewritten to suit it.
+
+* **Six pages** — Dashboard (greeting, assistant state orb, quick actions,
+  recent activity), Chat, Voice, News, Music, Settings.
+* **Frameless dark-premium window** with a custom title bar, a left sidebar with
+  an active indicator, and edge-drag resizing. Minimum size 1000×650, light and
+  dark themes, and reduced-motion is respected.
+* **System tray** — Open MERLIN / Voice command / Settings / Quit; closing the
+  window hides it to the tray instead of quitting (Settings → *Minimize to
+  tray*).
+* **Optional hotkey** — `Ctrl+Alt+M`, off by default, enabled in Settings.
+* **Never blocks the window** — Gemini calls, news fetches, speech recognition,
+  TTS and music playback all run on worker threads; the UI stays responsive and
+  reports what it is doing.
+* **Honest failure states** — a missing key, an unplugged microphone, a dead
+  network or an API error each become a friendly message. No stack traces, no
+  invented answers, no API key ever rendered on screen.
+
+`main.py` keeps working exactly as before for console use.
+
 ## Requirements
 
 | Requirement | Notes |
@@ -81,6 +104,22 @@ notepad .env
 
 ## Running
 
+### Desktop app
+
+```powershell
+myprojectenv\Scripts\python.exe app.py
+```
+
+The window opens immediately and shows **Starting…** while the backend loads
+(the first `import main` takes a few seconds) — the window keeps painting the
+whole time. The sidebar status turns **Online** when the backend is ready.
+
+Preferences live in `%LOCALAPPDATA%\MERLIN\settings.json`, outside the
+repository. `.env` is **not** read by MERLIN; the keys must be real Windows
+environment variables (see above).
+
+### Console
+
 ```powershell
 myprojectenv\Scripts\python.exe main.py
 ```
@@ -127,8 +166,23 @@ sending silence to the recogniser.
 myprojectenv\Scripts\python.exe test_merlin.py
 ```
 
-Runs the full regression suite (110 checks) without a microphone and without
-network access — audio output and the network-backed layers are stubbed.
+Runs the full backend regression suite (110 checks) without a microphone and
+without network access — audio output and the network-backed layers are stubbed.
+
+```powershell
+myprojectenv\Scripts\python.exe tests_ui.py
+```
+
+Runs the desktop UI suite (60 checks) headless (`QT_QPA_PLATFORM=offscreen`), so
+it works on CI and on a machine with no display. It builds the real window and
+the real services and covers: startup while the backend imports, all six pages
+and navigation, secret leakage, a missing Gemini key, a missing News key and a
+failed news request, an absent microphone, GUI responsiveness during a blocking
+backend call, the optional global hotkey, minimize/maximize/resize, the tray
+menu, close-to-tray vs close-to-quit, and shutdown. It also saves a PNG of
+every page in both themes and reads each one back to check it is not blank.
+
+Exits `0` only when every check passes.
 
 A live Gemini connectivity check is also available:
 
@@ -137,6 +191,24 @@ myprojectenv\Scripts\python.exe test_gemini.py
 ```
 
 This one does call the Gemini API, so `GEMINI_API_KEY` must be set.
+
+## Packaging
+
+Once the development version is verified, build the Windows executable:
+
+```powershell
+myprojectenv\Scripts\pip install "pyinstaller>=6.10,<7"
+myprojectenv\Scripts\pyinstaller.exe --noconfirm MERLIN.spec
+```
+
+This produces `dist\MERLIN.exe` — a single windowed (no console) executable.
+It needs no Python installation on the target machine and reads
+`GEMINI_API_KEY` / `NEWS_API_KEY` from the Windows environment at run time, so
+no key is ever baked into the binary; without them it still starts and says
+what is missing.
+
+`build/` and `dist/` are git-ignored — never commit a generated executable.
+`MERLIN.spec` itself is tracked.
 
 ## Diagnostics
 
@@ -152,18 +224,40 @@ This one does call the Gemini API, so `GEMINI_API_KEY` must be set.
 
 ```
 mega_Project_1/
+├── app.py               Entry point for the desktop app
 ├── main.py             Assistant: wake word, command dispatch, mic selection
 ├── musicLibrary.py     Song name → URL map used by the "play" command
 ├── mic_check.py        Microphone finder (also provides the shared is_live check)
 ├── mic_test.py         One-shot recognition test
 ├── b.py                Audio block probe
 ├── voice_gemini.py     Standalone voice + Gemini script
-├── test_merlin.py      Regression suite (110 checks, offline)
+├── test_merlin.py      Backend regression suite (110 checks, offline)
+├── tests_ui.py         Desktop UI suite (60 checks, headless)
 ├── test_gemini.py      Live Gemini connectivity check
+├── MERLIN.spec         PyInstaller recipe for dist\MERLIN.exe
+├── services/           Thin adapters between main.py and the UI
+│   ├── core.py             Speech thread, task pool, backend ownership
+│   ├── assistant_service.py  Gemini chat + honest credential status
+│   ├── news_service.py     Headlines off the GUI thread
+│   ├── music_service.py    Playlist / play / pause without invented state
+│   ├── voice_service.py    Mic ownership, device list, one-shot dictation
+│   ├── system_audio.py     Real Windows endpoint volume (pycaw)
+│   ├── settings_store.py   %LOCALAPPDATA%\MERLIN\settings.json
+│   └── audio_lock.py       Serialises PortAudio access across threads
+├── ui/                  PySide6 shell (signals only; no blocking calls)
+│   ├── app.py / window.py   Bootstrap, frameless window, tray, navigation
+│   ├── state.py             Backend signal → one honest UI state
+│   ├── theme.py             Two palettes + the whole stylesheet
+│   ├── hotkey.py            Optional Ctrl+Alt+M via RegisterHotKey
+│   ├── components/          Icons, orb, title bar, sidebar, banners, images
+│   └── views/               Dashboard, Chat, Voice, News, Music, Settings
 ├── requirements.txt    Pinned direct dependencies
 ├── .env.example        Environment variable names (no real values)
 └── .gitignore          Keeps secrets, venvs and generated files out of git
 ```
+
+`main.py` and the other backend files are **not** modified by the UI; every
+integration goes through `services/`.
 
 ## Configuration reference
 
@@ -211,6 +305,30 @@ endpoint.
 Confirm your microphone with `mic_check.py` and play back the saved
 `mic_check.wav`. If that recording does not contain your voice, the problem is
 the Windows input device, not MERLIN.
+
+**The desktop window never appears.**
+Run `myprojectenv\Scripts\python.exe app.py` from a terminal and read the
+output. A missing Qt platform plugin (`qwindows`) means the PySide6 install is
+incomplete — reinstall it with
+`myprojectenv\Scripts\pip install --force-reinstall PySide6`.
+
+**The sidebar stays on "Starting…".**
+The backend import failed. The window itself will show the reason rather than a
+stack trace; running `myprojectenv\Scripts\python.exe main.py` prints the same
+error directly.
+
+**Closing the window does not quit MERLIN.**
+That is *Minimize to tray*. Use **Quit** from the tray menu (right-click the
+icon), or turn the option off in Settings.
+
+**The `Ctrl+Alt+M` hotkey does nothing.**
+Windows reserves some combinations, and the hotkey is off by default. Turn it on
+in Settings; if it still does not fire, another application already owns that
+combination. The Settings page always states whether the hotkey registered.
+
+**The Music page's level slider is missing.**
+Endpoint volume could not be read (pycaw/Core Audio unavailable). Playback keys
+still work; only the slider is hidden, rather than showing a fake number.
 
 ## Notes
 
