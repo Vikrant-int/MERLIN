@@ -1,0 +1,46 @@
+# --- Secrets -----------------------------------------------------------------
+# Never commit real credentials. Local secret files are ignored so a key
+# cannot be pushed by accident. Copy .env.example to .env and fill it in.
+.env
+.env.*
+!.env.example
+*.env
+secrets.py
+secrets.json
+secrets.*.py
+
+# --- Credentials / key material ----------------------------------------------
+*.pem
+*.key
+*.pfx
+credentials.json
+service-account*.json
+
+# --- Python -------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# The virtual environment itself belongs on every clone but not in history.
+myprojectenv/
+
+# --- Local output / test artefacts -------------------------------------------
+*.wav
+*.log
+*.tmp
+
+# --- Editors / OS ------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.lnk
