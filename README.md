@@ -160,6 +160,20 @@ This step matters: Windows often exposes *Stereo Mix* and Bluetooth *Hands-Free*
 endpoints that are not real microphones. MERLIN discards those rather than
 sending silence to the recogniser.
 
+Two things found while verifying microphones on real hardware are worth
+knowing before you start:
+
+* **Check the mic's own input level.** `mmsys.cpl` → *Recording* → your mic →
+  *Properties* → *Levels* defaults to 60% on some headsets. At that level a
+  Bluetooth headset mic can read as near-digital-silence (peaks around
+  −40 dBFS) and get rejected as "silent", even though it works. Dragging the
+  slider to 100% produced full-scale live speech on the test rig.
+* **A laptop may have no internal mic at all.** Some HP codecs (e.g. `ALC236`)
+  expose no microphone endpoint — only Speaker, Stereo Mix and the 3.5 mm
+  jack. `Device Manager` shows no Realtek mic node, and the *Microphone
+  (Realtek)* endpoint sits `NotPresent`. If `mic_check.py` lists only Stereo
+  Mix and Bluetooth headsets, plug a wired or USB microphone in.
+
 ## Tests
 
 ```powershell
@@ -305,6 +319,15 @@ endpoint.
 Confirm your microphone with `mic_check.py` and play back the saved
 `mic_check.wav`. If that recording does not contain your voice, the problem is
 the Windows input device, not MERLIN.
+
+**Bluetooth headset mic works sometimes, reads silence at other times.**
+A Bluetooth *Hands-Free* voice link can carry live speech one capture and
+deliver flat digital silence the next, even while the endpoint stays "Active"
+in `mmsys.cpl` and the OS level meter shows nothing. This is the wireless
+link, not MERLIN: raising the mic level to 100% (see *Verify your
+microphone*) is the one software fix that helps; if speech still lands only
+intermittently in the capture, use a wired or USB microphone instead, because
+no probe timing or gain change makes an unstable RF voice channel reliable.
 
 **The desktop window never appears.**
 Run `myprojectenv\Scripts\python.exe app.py` from a terminal and read the
