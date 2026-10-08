@@ -262,6 +262,31 @@ class SettingsView(Page):
         # ---- AI ------------------------------------------------------------
         self._section("AI")
 
+        provider_combo = QComboBox()
+        provider_combo.addItem("Auto", "auto")
+        provider_combo.addItem("Mock (development mode)", "mock")
+        provider_combo.addItem("Gemini", "gemini")
+        index = provider_combo.findData(self._state.provider)
+        provider_combo.setCurrentIndex(0 if index < 0 else index)
+        provider_combo.currentIndexChanged.connect(
+            lambda i, box=provider_combo: self._on_provider(box.itemData(i))
+        )
+        self._provider_combo = provider_combo
+        self.layout.addWidget(_control_row(
+            "AI provider",
+            "Auto uses Gemini when GEMINI_API_KEY is set and otherwise "
+            "reports exactly what is missing. Mock runs entirely offline "
+            "with clearly-marked placeholder answers. Gemini always asks "
+            "Gemini and needs a key.",
+            provider_combo,
+        ))
+
+        self._provider_note = QLabel("")
+        self._provider_note.setObjectName("Muted")
+        self._provider_note.setWordWrap(True)
+        self.layout.addWidget(self._provider_note)
+        self._refresh_provider_note()
+
         info = gemini_info()
         self._gemini_row = StatusRow(
             "Gemini",
@@ -353,6 +378,29 @@ class SettingsView(Page):
             self._news_row.set_status(news_info())
         except Exception:      # never let a status refresh break the page
             return
+
+    # -- handlers ---------------------------------------------------------------
+    def _on_provider(self, mode: str) -> None:
+        self._state.set_provider(mode)
+        self._refresh_provider_note()
+
+    def _refresh_provider_note(self) -> None:
+        mode = self._state.provider
+        if mode == "mock":
+            self._provider_note.setText(
+                "Development mode: chat replies are local placeholder "
+                "answers from the Mock provider, never real Gemini replies."
+            )
+        elif mode == "gemini":
+            self._provider_note.setText(
+                "Forcing Gemini: a GEMINI_API_KEY must be configured, "
+                "otherwise chat reports what is missing."
+            )
+        else:
+            self._provider_note.setText(
+                "Auto: real Gemini answers when a key is configured; "
+                "otherwise MERLIN explains exactly what is missing."
+            )
 
     # -- helpers ---------------------------------------------------------------
     @staticmethod

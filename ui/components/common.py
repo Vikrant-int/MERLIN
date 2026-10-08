@@ -166,14 +166,22 @@ class EmptyState(QWidget):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title_label)
 
+        self._detail: QLabel | None = None
         if detail:
-            detail_label = QLabel(detail)
-            detail_label.setObjectName("Sub")
-            detail_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            detail_label.setWordWrap(True)
-            detail_label.setSizePolicy(QSizePolicy.Policy.Expanding,
+            self.set_detail(detail)
+
+    def set_detail(self, text: str) -> None:
+        """Replace the caption under the title (used for provider-aware text)."""
+        if self._detail is None:
+            self._detail = QLabel("")
+            self._detail.setObjectName("Sub")
+            self._detail.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._detail.setWordWrap(True)
+            self._detail.setSizePolicy(QSizePolicy.Policy.Expanding,
                                        QSizePolicy.Policy.Preferred)
-            layout.addWidget(detail_label)
+            self.layout().addWidget(self._detail)
+        self._detail.setText(text)
+        self._detail.setVisible(bool(text))
 
 
 def section_header(title: str, subtitle: str = "") -> QWidget:

@@ -21,6 +21,10 @@ DEFAULTS: dict[str, object] = {
     "hotkey": False,
     "voice_volume": 100,
     "voice_rate": 200,
+    # AI provider for chat: "auto" (default), "mock" (development mode) or
+    # "gemini". The initial value is seeded from MERLIN_PROVIDER below and is
+    # a preference, never a credential -- exactly like "theme".
+    "ai_provider": "auto",
 }
 
 # Keys that must never appear in this file, even by accident.
@@ -46,6 +50,12 @@ class SettingsStore(QObject):
             path = None
         self._path = path or settings_path()
         self._values: dict[str, object] = dict(DEFAULTS)
+        # MERLIN_PROVIDER (auto|mock|gemini) seeds a fresh install; anything
+        # saved to settings.json later wins, so the in-app selector is the
+        # source of truth once it has been used.
+        env_mode = (os.environ.get("MERLIN_PROVIDER") or "").strip().lower()
+        if env_mode in ("auto", "mock", "gemini"):
+            self._values["ai_provider"] = env_mode
         self._load()
 
     # -- storage -----------------------------------------------------------

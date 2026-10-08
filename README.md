@@ -187,14 +187,17 @@ without network access — audio output and the network-backed layers are stubbe
 myprojectenv\Scripts\python.exe tests_ui.py
 ```
 
-Runs the desktop UI suite (60 checks) headless (`QT_QPA_PLATFORM=offscreen`), so
+Runs the desktop UI suite (64 checks total, 60 original baseline plus 4
+new provider-switching checks) headless (`QT_QPA_PLATFORM=offscreen`), so
 it works on CI and on a machine with no display. It builds the real window and
 the real services and covers: startup while the backend imports, all six pages
 and navigation, secret leakage, a missing Gemini key, a missing News key and a
 failed news request, an absent microphone, GUI responsiveness during a blocking
 backend call, the optional global hotkey, minimize/maximize/resize, the tray
-menu, close-to-tray vs close-to-quit, and shutdown. It also saves a PNG of
-every page in both themes and reads each one back to check it is not blank.
+menu, close-to-tray vs close-to-quit, development/mock provider mode
+(visibility, chat replies, settings selector, history clearing), and shutdown.
+It also saves a PNG of every page in both themes and reads each one back to
+check it is not blank.
 
 Exits `0` only when every check passes.
 
@@ -233,6 +236,7 @@ what is missing.
 | `b.py` | Block-level audio probe for inspecting a specific device. |
 | `voice_gemini.py` | Standalone voice + Gemini round trip. |
 | `test_gemini.py` | Standalone Gemini connectivity check. |
+| `test_providers.py` | Provider abstraction checks (Mock, Gemini, resolution, graceful fallback). |
 
 ## Project structure
 
@@ -246,12 +250,14 @@ mega_Project_1/
 ├── b.py                Audio block probe
 ├── voice_gemini.py     Standalone voice + Gemini script
 ├── test_merlin.py      Backend regression suite (110 checks, offline)
-├── tests_ui.py         Desktop UI suite (60 checks, headless)
+├── tests_ui.py         Desktop UI suite (64 checks, headless)
+├── test_providers.py   Provider abstraction tests (29 checks, offline)
 ├── test_gemini.py      Live Gemini connectivity check
 ├── MERLIN.spec         PyInstaller recipe for dist\MERLIN.exe
 ├── services/           Thin adapters between main.py and the UI
 │   ├── core.py             Speech thread, task pool, backend ownership
-│   ├── assistant_service.py  Gemini chat + honest credential status
+│   ├── ai_provider.py      Provider abstraction: Mock (dev) and Gemini
+│   ├── assistant_service.py  Chat via provider + honest credential status
 │   ├── news_service.py     Headlines off the GUI thread
 │   ├── music_service.py    Playlist / play / pause without invented state
 │   ├── voice_service.py    Mic ownership, device list, one-shot dictation
@@ -281,6 +287,7 @@ All optional — MERLIN runs with sensible defaults if they are unset.
 |---|---|---|
 | `GEMINI_API_KEY` | *(none)* | Gemini API key. Required for questions. |
 | `NEWS_API_KEY` | *(none)* | NewsAPI key. Required for `news`. |
+| `MERLIN_PROVIDER` | `auto` | Chat AI provider: `auto`, `mock` (development/offline) or `gemini`. |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model to use. |
 | `NEWS_COUNTRY` | `in` | Preferred NewsAPI country. |
 | `NEWS_QUERY` | `india OR travel` | Search query for the `everything` fallback. |

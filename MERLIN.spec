@@ -37,6 +37,9 @@ hiddenimports = [
     "pyttsx3",
     "pyttsx3.drivers",
     "pyttsx3.drivers.sapi5",
+    # AI provider abstraction (imported by services.assistant_service).
+    "services",
+    "services.ai_provider",
     # Gemini.
     "google.genai",
     "requests",

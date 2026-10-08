@@ -84,6 +84,14 @@ class DashboardView(Page):
         self._caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.addWidget(self._caption)
 
+        # Shown only in Mock/development mode so nobody mistakes it for a
+        # live assistant. Hidden by default; the provider signal toggles it.
+        self._mode_pill = QLabel("Development mode — AI Provider: Mock")
+        self._mode_pill.setObjectName("Pill")
+        self._mode_pill.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._mode_pill.hide()
+        self.layout.addWidget(self._mode_pill)
+
         self._detail = QLabel("")
         self._detail.setObjectName("DangerText")
         self._detail.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -152,8 +160,10 @@ class DashboardView(Page):
         # ---- wiring --------------------------------------------------------
         state.coreStateChanged.connect(self._on_core_state)
         state.activityChanged.connect(self._rebuild_activity)
+        state.providerChanged.connect(self._on_provider_changed)
         self._rebuild_activity()
         self._on_core_state(state.core_state)
+        self._on_provider_changed(state.provider)
 
     # -- theme -------------------------------------------------------------
     def apply_theme(self, colours: dict[str, str]) -> None:
@@ -171,6 +181,10 @@ class DashboardView(Page):
             self._navigate(key)
 
     # -- assistant core ----------------------------------------------------
+    def _on_provider_changed(self, mode: str) -> None:
+        """Mock mode must be visible on the home screen, never silent."""
+        self._mode_pill.setVisible(str(mode) == "mock")
+
     def _on_core_state(self, state_name: str) -> None:
         self._core.set_state(state_name)
         self._caption.setText(

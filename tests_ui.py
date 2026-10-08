@@ -519,6 +519,126 @@ pump(0.1)
 
 
 # ==========================================================================
+# 6b. development / mock provider mode
+# ==========================================================================
+print("\n== development / mock provider ==")
+
+from PySide6.QtWidgets import QComboBox  # noqa: E402
+
+_original_provider = state.settings.get("ai_provider", "auto")
+try:
+    def _mock_reply_in_chat():
+        window.navigate("chat")
+        pump(0.1)
+        chat = window._views["chat"]
+        # Start from a clean transcript through the real reset path.
+        state.assistant.history.clear()
+        chat._service.reset()
+        ensure(wait_until(lambda: not chat._messages, timeout=15),
+               "transcript did not reset before the mock test")
+
+        state.set_provider("mock")
+        pump(0.1)
+        ensure(state.provider == "mock", "provider did not switch to mock")
+        ensure(state.assistant.provider_mode == "mock",
+               "assistant did not inherit the mock provider")
+
+        chat._input.setPlainText("hello")
+        chat._send()
+        ok = wait_until(lambda: not state.assistant.busy, timeout=15)
+        ensure(ok, "mock reply never arrived")
+        pump(0.2)
+        text = "\n".join(collect_text(chat))
+        ensure("development mode" in text.lower(),
+               f"no development-mode reply: {text[:200]!r}")
+        ensure("Mock" in text, "chat does not name the Mock provider")
+        ensure("Traceback" not in text, "chat shows a stack trace")
+        names = [w.objectName() for w in chat.findChildren(QWidget)]
+        ensure("ChatBubbleAssistant" in names,
+               "no assistant bubble in the transcript")
+    check("mock provider answers in the chat transcript", _mock_reply_in_chat)
+
+    def _mock_identity_visible():
+        # No part of the UI may pretend the Mock provider is Gemini.
+        window.navigate("chat")
+        pump(0.15)
+        text = "\n".join(collect_text(window._views["chat"]))
+        ensure("Powered by your Gemini connection." not in text,
+               "subtitle still claims a live Gemini connection")
+        ensure("Mock (dev)" in text, "chat pill does not say Mock (dev)")
+        ensure("Development mode" in text,
+               "chat does not announce development mode")
+
+        window.navigate("dashboard")
+        pump(0.15)
+        dash = window._views["dashboard"]
+        ensure(dash._mode_pill.isVisible(),
+               "dashboard hides the development pill in mock mode")
+        dtext = "\n".join(collect_text(dash))
+        ensure("Development mode" in dtext,
+               "dashboard does not announce development mode")
+        ensure("AI Provider: Mock" in dash._mode_pill.text(),
+               "dashboard pill does not name the Mock provider")
+    check("development mode is visible throughout the UI", _mock_identity_visible)
+
+    def _settings_provider_selector():
+        state.set_provider("auto")
+        pump(0.1)
+        fresh = SettingsView(state, window.navigate)
+        _keep.append(fresh)
+        pump(0.15)
+        text = "\n".join(collect_text(fresh))
+        ensure("AI provider" in text, "settings has no provider selector")
+
+        combo = None
+        for widget in fresh.findChildren(QComboBox):
+            if (widget.findData("auto") >= 0
+                    and widget.findData("mock") >= 0
+                    and widget.findData("gemini") >= 0):
+                combo = widget
+                break
+        ensure(combo is not None, "provider combo not found")
+        items = [combo.itemText(i) for i in range(combo.count())]
+        ensure(any("Mock" in item for item in items),
+               "settings does not offer Mock mode")
+        combo.setCurrentIndex(combo.findData("mock"))
+        pump(0.15)
+        ensure(state.provider == "mock",
+               "choosing Mock in Settings did not switch the provider")
+    check("settings selects the AI provider", _settings_provider_selector)
+
+    def _mock_clear_history():
+        window.navigate("chat")
+        pump(0.1)
+        chat = window._views["chat"]
+        state.assistant.history.clear()
+        chat._messages = []
+
+        chat._input.setPlainText("first question")
+        chat._send()
+        ensure(wait_until(lambda: not state.assistant.busy, timeout=15),
+               "first mock reply never arrived")
+        chat._input.setPlainText("second question")
+        chat._send()
+        ensure(wait_until(lambda: not state.assistant.busy, timeout=15),
+               "second mock reply never arrived")
+        pump(0.2)
+        ensure(len(chat._messages) >= 4, "transcript did not accumulate")
+
+        chat._service.reset()
+        ensure(wait_until(lambda: len(chat._messages) == 0, timeout=15),
+               "reset did not clear the transcript")
+        pump(0.2)
+        text = "\n".join(collect_text(chat))
+        ensure("first question" not in text and "second question" not in text,
+               "cleared messages are still visible")
+    check("clearing the conversation works in mock mode", _mock_clear_history)
+finally:
+    state.set_provider(_original_provider)
+    pump(0.1)
+
+
+# ==========================================================================
 # 7. no microphone
 # ==========================================================================
 print("\n== microphone unavailable ==")

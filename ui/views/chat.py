@@ -61,9 +61,9 @@ class ChatView(PanelPage):
         title = QLabel("Chat with MERLIN")
         title.setObjectName("H1")
         title_column.addWidget(title)
-        subtitle = QLabel("Powered by your Gemini connection.")
-        subtitle.setObjectName("Sub")
-        title_column.addWidget(subtitle)
+        self._subtitle = QLabel("Powered by your Gemini connection.")
+        self._subtitle.setObjectName("Sub")
+        title_column.addWidget(self._subtitle)
         header_layout.addLayout(title_column)
         header_layout.addStretch(1)
 
@@ -160,6 +160,8 @@ class ChatView(PanelPage):
         self._service.busyChanged.connect(self._on_busy)
         state.voice.heardOnce.connect(self._on_dictated)
         state.backendReady.connect(self.refresh_credentials)
+        # Switching the AI provider must update the pill/subtitle immediately.
+        state.providerChanged.connect(self.refresh_credentials)
 
         for entry in self._service.history:
             self._messages.append(dict(entry))
@@ -175,7 +177,34 @@ class ChatView(PanelPage):
     def refresh_credentials(self) -> None:
         from services.assistant_service import gemini_info  # noqa: PLC0415
 
-        info = gemini_info()
+        if self._state.provider == "mock":
+            self._render_dev_mode()
+            return
+        self._render_gemini_status(gemini_info())
+
+    def _render_dev_mode(self) -> None:
+        """Mock provider: every indicator says "development", nothing hides it."""
+        self._subtitle.setText("Development mode — local placeholder answers.")
+        self._status.setText("Mock (dev)")
+        self._config_banner.show_message(
+            "Development mode: AI Provider Mock",
+            "Answers here are local placeholder replies written by the Mock "
+            "provider — never real Gemini answers. Switch to Auto or Gemini "
+            "in Settings to connect the Gemini API.",
+            "Open Settings",
+        )
+        self._empty.set_detail(
+            "Messages stay on this device and are answered by the local Mock "
+            "provider while development mode is on; nothing is sent to "
+            "Gemini."
+        )
+
+    def _render_gemini_status(self, info: dict) -> None:
+        self._subtitle.setText("Powered by your Gemini connection.")
+        self._empty.set_detail(
+            "Ask MERLIN anything. Messages stay on this device and are sent "
+            "to Gemini only when you press Send."
+        )
         if info.get("starting"):
             # The backend import is still running; say so rather than
             # claiming the key is missing.

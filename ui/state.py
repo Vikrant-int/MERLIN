@@ -11,6 +11,7 @@ from datetime import datetime
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from services.ai_provider import PROVIDERS as AI_PROVIDERS
 from services.assistant_service import AssistantService
 from services.core import BACKEND_ERROR, SpeechEngine, backend_ready
 from services.music_service import MusicService
@@ -46,6 +47,8 @@ class AppState(QObject):
     activityChanged = Signal()
     onlineChanged = Signal(bool)
     themeChanged = Signal(str)
+    #: Emitted when the AI provider (auto / mock / gemini) changes.
+    providerChanged = Signal(str)
     #: Emitted once the backend import has finished, either way. Pages use
     #: it to upgrade their "still starting" status to the real answer.
     backendReady = Signal()
@@ -64,6 +67,9 @@ class AppState(QObject):
 
         self.activity: list[dict] = []
         self.settings = SettingsStore(parent=self)
+        # Keep the assistant's provider in step with the stored preference
+        # (which was seeded from MERLIN_PROVIDER on a fresh machine).
+        self.assistant.set_provider(self.provider)
         self.hotkey = GlobalHotkey(self)
         self.theme = str(self.settings.get("theme", "dark"))
 
@@ -128,6 +134,24 @@ class AppState(QObject):
         """Keep the Windows Run key in step with the user's choice."""
         wanted = bool(self.settings.get("start_with_windows", False))
         return set_startup(wanted)
+
+    # -- AI provider ---------------------------------------------------------
+    @property
+    def provider(self) -> str:
+        """The validated AI provider name ("auto", "mock" or "gemini")."""
+        value = str(self.settings.get("ai_provider", "auto")).strip().lower()
+        return value if value in AI_PROVIDERS else "auto"
+
+    def set_provider(self, mode: str) -> None:
+        """Persist and apply an AI provider choice; invalid input → auto."""
+        mode = str(mode or "auto").strip().lower()
+        if mode not in AI_PROVIDERS:
+            mode = "auto"
+        self.assistant.set_provider(mode)
+        if mode == self.provider:
+            return
+        self.settings.set("ai_provider", mode)
+        self.providerChanged.emit(mode)
 
     # -- derived assistant state -------------------------------------------
     @property

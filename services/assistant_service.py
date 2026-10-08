@@ -10,6 +10,13 @@ from datetime import datetime
 
 from PySide6.QtCore import QObject, Signal
 
+from .ai_provider import (
+    PROVIDER_AUTO,
+    PROVIDER_GEMINI,
+    PROVIDER_MOCK,
+    is_dev_mode,
+    resolve_provider,
+)
 from .core import (
     BACKEND_ERROR,
     BACKEND_READY,
@@ -94,8 +101,26 @@ class AssistantService(QObject):
         self._lock = threading.Lock()
         self._pending = ""
         self.history: list[dict] = []  # {"role", "text", "time"}
+        # AI provider mode: "auto" (default), "mock" (development) or
+        # "gemini". None means "use the MERLIN_PROVIDER environment default".
+        self._mode: str | None = None
 
     # -- public API --------------------------------------------------------
+    def set_provider(self, mode: str | None) -> None:
+        """Switch the AI provider. ``None``/anything unknown → env default."""
+        value = str(mode or "").strip().lower()
+        self._mode = (
+            value if value in (PROVIDER_AUTO, PROVIDER_MOCK, PROVIDER_GEMINI)
+            else None
+        )
+
+    @property
+    def provider_mode(self) -> str:
+        """The validated provider name currently in effect."""
+        from .ai_provider import effective_provider  # noqa: PLC0415
+
+        return effective_provider(self._mode)
+
     @property
     def busy(self) -> bool:
         return bool(self._pending)
@@ -104,8 +129,10 @@ class AssistantService(QObject):
         text = (text or "").strip()
         if not text or self._pending:
             return
-        if not BACKEND_READY.is_set():
-            # Honest, immediate answer instead of a blocking import.
+        if not BACKEND_READY.is_set() and not is_dev_mode(self._mode):
+            # The Mock provider needs no backend at all, so it may answer
+            # before the speech thread finishes importing `main`; anything
+            # else gets the same honest, immediate answer as before.
             self.failed.emit(
                 text,
                 (BACKEND_ERROR[-1] if BACKEND_ERROR
@@ -117,7 +144,7 @@ class AssistantService(QObject):
         self._runner.submit("chat.send", lambda: self._send_blocking(text))
 
     def reset(self) -> None:
-        if not BACKEND_READY.is_set():
+        if not BACKEND_READY.is_set() and not is_dev_mode(self._mode):
             # Nothing has been asked of Gemini yet, so there is nothing to
             # clear there either -- just tidy the transcript.
             self.history.clear()
@@ -127,14 +154,14 @@ class AssistantService(QObject):
 
     # -- worker ------------------------------------------------------------
     def _send_blocking(self, text: str) -> str:
-        backend = get_main()
+        provider = resolve_provider(self._mode, get_backend=get_main)
         with self._lock:
-            return backend.gemini.send(text)
+            return provider.send(text)
 
     def _reset_blocking(self) -> bool:
-        backend = get_main()
+        provider = resolve_provider(self._mode, get_backend=get_main)
         with self._lock:
-            backend.gemini.reset()
+            provider.reset()
         return True
 
     # -- results -----------------------------------------------------------
